@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)} body{margin:0} img{max-width:100%} [hidden]{display:none!important}</style>
+</head>
+<body>
+<title>코인 차트 판단</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one coin at a time — search bar, three verdict cards, one big chart (price + RSI + MACD). 상승=빨강, 하락=파랑. */
+:root{
+  --bg:#f4f5f8; --surface:#ffffff; --surface-2:#eceef3; --line:#d6dae3; --grid:#e6e9ef;
+  --fg:#161a2b; --muted:#60677b; --accent:#3b57d1;
+  --up:#d63b3b; --up-soft:#fbe8e8; --down:#2a6ad4; --down-soft:#e4edfb; --flat:#7b8295; --flat-soft:#ebecf1;
+  --sup:#1f9d6a; --res:#d6603b; --stop:#b02a2a;
+  --font:"IBM Plex Sans KR","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1219; --surface:#181c27; --surface-2:#202534; --line:#2d3446; --grid:#242a3a;
+  --fg:#e9ebf2; --muted:#9097ab; --accent:#8198f2;
+  --up:#f06a6a; --up-soft:#3a2224; --down:#6ea3f7; --down-soft:#1f2e48; --flat:#8d93a6; --flat-soft:#262a36;
+  --sup:#3fcf92; --res:#f08a62; --stop:#f06a6a; color-scheme:dark; }}
+:root[data-theme="dark"]{
+  --bg:#0f1219; --surface:#181c27; --surface-2:#202534; --line:#2d3446; --grid:#242a3a;
+  --fg:#e9ebf2; --muted:#9097ab; --accent:#8198f2;
+  --up:#f06a6a; --up-soft:#3a2224; --down:#6ea3f7; --down-soft:#1f2e48; --flat:#8d93a6; --flat-soft:#262a36;
+  --sup:#3fcf92; --res:#f08a62; --stop:#f06a6a; color-scheme:dark; }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:20px;margin:0;padding-top:18px;letter-spacing:-.01em}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input,select,button{font-family:inherit;font-size:15px;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+input#sym{font-family:var(--mono);font-weight:600;text-transform:uppercase;width:150px}
+input#lev{width:70px;font-family:var(--mono)}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.go{background:var(--accent);color:#fff;border-color:transparent;font-weight:700;padding:9px 18px;cursor:pointer}
+button.go:disabled{opacity:.5}
+.status{color:var(--muted);font-size:12px;margin-left:auto}
+.lbl{font-size:12px;color:var(--muted)}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;border-top:4px solid var(--flat)}
+.card.long{border-top-color:var(--up)} .card.short{border-top-color:var(--down)} .card.sup{border-top-color:var(--sup)} .card.res{border-top-color:var(--res)}
+.card .t{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.card .big{font-size:22px;font-weight:700;line-height:1.2}
+.card.long .big{color:var(--up)} .card.short .big{color:var(--down)}
+.card .why{font-size:13px;color:var(--muted)}
+.card .row{display:flex;justify-content:space-between;gap:10px;font-size:13px;border-top:1px solid var(--line);padding-top:6px}
+.card .row b{font-family:var(--mono);font-weight:600;white-space:nowrap}
+.card .act{font-size:13.5px;font-weight:500;background:var(--surface-2);border-radius:8px;padding:8px 10px}
+.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;background:var(--accent);color:#fff;vertical-align:middle;margin-left:4px}
+.up-c{color:var(--up)} .down-c{color:var(--down)}
+
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px 6px;min-width:0}
+.chart .head{display:flex;justify-content:space-between;align-items:baseline;padding:0 10px 6px;flex-wrap:wrap;gap:6px}
+.chart .head .p{font-family:var(--mono);font-size:22px;font-weight:600}
+.chart .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--muted)}
+.legend i{display:inline-block;width:16px;border-top:2px solid;vertical-align:middle;margin-right:4px}
+canvas{width:100%;height:auto;display:block;max-width:100%}
+.err{padding:14px;color:var(--muted);background:var(--surface);border:1px solid var(--line);border-radius:10px}
+details{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--muted)}
+summary{cursor:pointer;font-weight:600;color:var(--fg)}
+details p{margin:8px 0 0;max-width:75ch} details b{color:var(--fg)}
+footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+  <h1>코인 차트 판단</h1>
+  <div class="bar">
+    <input id="sym" value="HBAR" placeholder="코인 (예: ETH)" autocomplete="off" aria-label="코인">
+    <select id="ex" aria-label="거래소"><option value="binance-futures">바이낸스 선물</option><option value="binance-spot">바이낸스 현물</option><option value="upbit">업비트</option></select>
+    <select id="tf" aria-label="봉"><option value="4h">4시간봉</option><option value="1h">1시간봉</option><option value="1d">일봉</option></select>
+    <span class="lbl">레버리지</span><input id="lev" value="10" inputmode="numeric" aria-label="레버리지">
+    <button class="go" id="go">분석</button>
+    <span class="status" id="status"></span>
+  </div>
+  <div class="cards" id="cards" hidden></div>
+  <div class="err" id="err" hidden></div>
+  <div class="chart" id="chartbox" hidden>
+    <div class="head"><div><span class="p" id="price"></span> <span class="lbl" id="chg"></span></div>
+      <div class="legend"><span><i style="border-color:var(--sup)"></i>빗각 지지선</span><span><i style="border-color:var(--res)"></i>빗각 저항선</span><span><i style="border-color:var(--stop);border-top-style:dashed"></i>스탑로스</span><span><i style="border-color:var(--accent)"></i>진입 타점</span></div></div>
+    <canvas id="cv" width="1100" height="640"></canvas>
+  </div>
+  <details><summary>판단 규칙</summary>
+    <p><b>RSI·MACD 판단</b> MACD선이 시그널선 위(상승 모멘텀)이고 RSI가 70 미만이면 롱 쪽, MACD선이 시그널선 아래이고 RSI가 30 초과면 숏 쪽. RSI가 과매수(70↑)·과매도(30↓)로 모멘텀과 반대 신호를 내면 "대기". 최근 3봉 안의 골든·데드크로스와 히스토그램 확대는 "강함"으로 표시합니다.</p>
+    <p><b>스탑로스</b> 롱은 최근 20봉 안 마지막 저점 아래 0.3 ATR, 숏은 마지막 고점 위 0.3 ATR. 그 자리가 현재가에서 2.5 ATR보다 멀면 2 ATR로 줄입니다(손실 한도 우선). 증거금 손실률은 손절 거리 × 레버리지입니다.</p>
+    <p><b>빗각</b> 좌우 5봉 기준 피벗 저점 둘을 이은 우상향 선(지지선), 피벗 고점 둘을 이은 우하향 선(저항선)을 로그 가격으로 연장합니다. 사이에서 종가가 1% 넘게 뚫린 선은 버리고, 종가가 선 아래(위) 1%로 마감하면 선은 소멸합니다. <b>롱 타점</b>: 가격이 지지선에 닿고(1% 이내) 종가가 선 위에서 마감할 때. <b>숏 타점</b>: 저항선에 닿고 종가가 선 아래에서 마감할 때. 저항선을 1% 넘게 돌파한 뒤 되돌아와 밟으면 그 선은 롱 타점이 됩니다. "약 N봉 뒤"는 가격이 지금 그대로일 때 선과 만나는 시점입니다.</p>
+  </details>
+  <footer>시세: <a href="https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Kline-Candlestick-Data" target="_blank" rel="noopener">Binance API</a> · <a href="https://docs.upbit.com/kr/reference/list-candles-days" target="_blank" rel="noopener">업비트 API</a>. 과거 가격으로 계산한 규칙 기반 안내이며 투자 자문이 아닙니다. 매매 판단과 책임은 사용자에게 있습니다.</footer>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var $=function(id){return document.getElementById(id);};
+  var SANDBOX = location.protocol!=='file:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  var KEY='coin-chart-simple-v1', quote='USDT';
+  try{ var st=JSON.parse(localStorage.getItem(KEY)||'{}'); if(st.sym) $('sym').value=st.sym; if(st.ex) $('ex').value=st.ex; if(st.tf) $('tf').value=st.tf; if(st.lev) $('lev').value=st.lev; }catch(e){}
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify({sym:$('sym').value,ex:$('ex').value,tf:$('tf').value,lev:$('lev').value})); }catch(e){} }
+
+  /* ---------- data ---------- */
+  function normalize(sym, ex){
+    var s=sym.toUpperCase().replace(/[^A-Z0-9-]/g,''); if(!s) return '';
+    if(ex==='upbit'){ if(s.indexOf('-')>0) return s; return 'KRW-'+s.replace(/(USDT|USDC|BUSD)$/,''); }
+    s=s.replace(/^KRW-/,'').replace(/^USDT-/,'');
+    if(/(USDT|USDC|BUSD|BTC)$/.test(s)&&s.length>5) return s;
+    return s+'USDT';
+  }
+  function getJson(u){ return fetch(u).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }); }
+  function fetchCandles(ex, sym, tf){
+    if(ex==='upbit'){
+      var path= tf==='1d'?'days':tf==='4h'?'minutes/240':'minutes/60', base='https://api.upbit.com/v1/candles/'+path+'?market='+encodeURIComponent(sym)+'&count=200', acc=[];
+      function page(to){ return getJson(base+(to?'&to='+encodeURIComponent(to):'')).then(function(j){ if(!Array.isArray(j)||!j.length) return acc; acc=acc.concat(j); if(j.length<200||acc.length>=600) return acc; return page(j[j.length-1].candle_date_time_utc+'Z'); }); }
+      return page(null).then(function(j){ if(j.length<80) throw new Error('캔들 부족'); return j.slice().reverse().map(function(k){ return {t:k.timestamp,o:+k.opening_price,h:+k.high_price,l:+k.low_price,c:+k.trade_price,v:+k.candle_acc_trade_volume}; }); });
+    }
+    var host= ex==='binance-futures'?'https://fapi.binance.com/fapi/v1/klines':'https://api.binance.com/api/v3/klines';
+    return getJson(host+'?symbol='+encodeURIComponent(sym)+'&interval='+tf+'&limit=600').then(function(j){ if(!Array.isArray(j)||j.length<80) throw new Error('캔들 부족'); return j.map(function(k){ return {t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}; }); });
+  }
+
+  /* ---------- indicators ---------- */
+  function ema(a,n){ var o=new Array(a.length).fill(NaN),k=2/(n+1),s=0; for(var i=0;i<a.length;i++){ if(i<n-1){s+=a[i];continue;} if(i===n-1){s+=a[i];o[i]=s/n;continue;} o[i]=a[i]*k+o[i-1]*(1-k);} return o; }
+  function sma(a,n){ var o=new Array(a.length).fill(NaN),s=0; for(var i=0;i<a.length;i++){ s+=a[i]; if(i>=n)s-=a[i-n]; if(i>=n-1)o[i]=s/n;} return o; }
+  function rsi(c,n){ var o=new Array(c.length).fill(NaN),g=0,l=0; for(var i=1;i<c.length;i++){ var d=c[i]-c[i-1],u=d>0?d:0,dn=d<0?-d:0; if(i<=n){g+=u;l+=dn;if(i===n){g/=n;l/=n;o[i]=l===0?100:100-100/(1+g/l);}continue;} g=(g*(n-1)+u)/n;l=(l*(n-1)+dn)/n;o[i]=l===0?100:100-100/(1+g/l);} return o; }
+  function macd(c){ var e12=ema(c,12),e26=ema(c,26),line=c.map(function(_,i){return e12[i]-e26[i];}),sig=new Array(c.length).fill(NaN),s=ema(line.slice(25),9); for(var i=0;i<s.length;i++)sig[25+i]=s[i]; return {line:line,signal:sig,hist:line.map(function(v,i){return v-sig[i];})}; }
+  function atr(cs,n){ return sma(cs.map(function(x,i){ var pc=i?cs[i-1].c:x.c; return Math.max(x.h-x.l,Math.abs(x.h-pc),Math.abs(x.l-pc)); }),n); }
+
+  /* ---------- 빗각 ---------- */
+  var N=5, TOL=0.01, MAX_LIFE=200;
+  function pivots(cs){ var lows=[],highs=[]; for(var i=N;i<cs.length-N;i++){ var L=true,H=true; for(var j=i-N;j<=i+N;j++){ if(j===i)continue; if(cs[j].l<=cs[i].l)L=false; if(cs[j].h>=cs[i].h)H=false; if(!L&&!H)break; } if(L)lows.push(i); if(H)highs.push(i);} return {lows:lows,highs:highs}; }
+  function mkLine(cs,a,b,kind){ var ya=Math.log(kind==='sup'?cs[a].l:cs[a].h),yb=Math.log(kind==='sup'?cs[b].l:cs[b].h),k=(yb-ya)/(b-a); var L={a:a,b:b,kind:kind,k:k,at:function(i){return Math.exp(ya+k*(i-a));}}; for(var i=a+1;i<b;i++){ var p=L.at(i),c=cs[i].c; if(kind==='sup'&&c<p*(1-TOL))return null; if(kind==='res'&&c>p*(1+TOL))return null; } return L; }
+  function bitgak(cs){
+    var n=cs.length-1, pv=pivots(cs), lines=[], out=[], k, m, a, b, L;
+    for(k=0;k<pv.lows.length;k++) for(m=1;m<=3&&k+m<pv.lows.length;m++){ a=pv.lows[k];b=pv.lows[k+m]; if(cs[b].l>cs[a].l&&(L=mkLine(cs,a,b,'sup')))lines.push(L); }
+    for(k=0;k<pv.highs.length;k++) for(m=1;m<=3&&k+m<pv.highs.length;m++){ a=pv.highs[k];b=pv.highs[k+m]; if(cs[b].h<cs[a].h&&(L=mkLine(cs,a,b,'res')))lines.push(L); }
+    lines.forEach(function(Ln){
+      var start=Ln.b+N, end=Math.min(n,Ln.b+MAX_LIFE), broken=Ln.kind==='sup', alive=true, touching=false, i;
+      if(start>n||end<n) return;
+      for(i=start;i<=end;i++){
+        var p=Ln.at(i), c=cs[i].c;
+        if(!broken){ if(c>p*(1+TOL)) broken=true; else if(c<p*(1-TOL*3)&&i-Ln.b>60){alive=false;break;} continue; }
+        if(c<p*(1-TOL)){alive=false;break;}
+      }
+      if(!alive) return;
+      var p=Ln.at(n), lo=cs[n].l, hi=cs[n].h, c=cs[n].c;
+      if(broken) touching = lo<=p*(1+TOL) && c>p; else touching = hi>=p*(1-TOL) && c<p;
+      out.push({line:Ln, broken:broken, p:p, dist:p/c-1, touching:touching});
+    });
+    var sup=out.filter(function(x){return x.broken && x.p<cs[n].c;}).sort(function(x,y){return y.p-x.p;});
+    var res=out.filter(function(x){return !x.broken && x.p>cs[n].c;}).sort(function(x,y){return x.p-y.p;});
+    return {sup:sup[0]||null, res:res[0]||null, all:out, pv:pv};
+  }
+  function barsUntil(x, c){ // price flat, line moving: k = ln(c/p)/slope
+    var k=x.line.k; if(Math.abs(k)<1e-7) return Infinity; var v=Math.log(c/x.p)/k; return v>0?v:Infinity;
+  }
+
+  /* ---------- verdicts ---------- */
+  function fmtP(p){ if(!isFinite(p))return '-'; if(quote==='KRW') return p.toLocaleString('ko-KR',{maximumFractionDigits:p>=100?0:p>=1?2:4}); var d=p>=100?2:p>=1?4:p>=0.01?5:7; return p.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+  function pct(x){ return (x>=0?'+':'')+x.toFixed(2)+'%'; }
+  function tfWord(tf,bars){ var h= tf==='1d'?24:tf==='4h'?4:1, hrs=bars*h; return hrs>=48?('약 '+(hrs/24).toFixed(1)+'일'):('약 '+Math.round(hrs)+'시간'); }
+
+  function analyze(cs, tf, lev){
+    var n=cs.length-1, c=cs.map(function(x){return x.c;}), R=rsi(c,14), M=macd(c), A=atr(cs,14), r=R[n], ml=M.line[n], ms=M.signal[n], h0=M.hist[n], h1=M.hist[n-1], h2=M.hist[n-2];
+    var gc= ml>ms && [1,2,3].some(function(k){return M.line[n-k]<=M.signal[n-k];});
+    var dc= ml<ms && [1,2,3].some(function(k){return M.line[n-k]>=M.signal[n-k];});
+    var bull= ml>ms, side, strength, why;
+    if(bull && r<70){ side='long'; strength=(gc||(h0>h1&&h1>h2))&&r<60?'강함':'보통'; why='MACD선이 시그널선 위'+(gc?' (방금 골든크로스)':h0>h1?' (히스토그램 확대 중)':' (힘은 줄어드는 중)')+', RSI '+r.toFixed(0)+(r<40?' 과매도권 → 반등 여지':' 정상권'); }
+    else if(!bull && r>30){ side='short'; strength=(dc||(h0<h1&&h1<h2))&&r>40?'강함':'보통'; why='MACD선이 시그널선 아래'+(dc?' (방금 데드크로스)':h0<h1?' (히스토그램 확대 중)':' (힘은 줄어드는 중)')+', RSI '+r.toFixed(0)+(r>60?' 과매수권 → 되돌림 여지':' 정상권'); }
+    else { side='wait'; strength=''; why= bull ? 'MACD는 상승인데 RSI '+r.toFixed(0)+'로 과매수 — 쫓아 사기엔 늦은 자리' : 'MACD는 하락인데 RSI '+r.toFixed(0)+'로 과매도 — 쫓아 팔기엔 늦은 자리'; }
+    // stop loss
+    var a=A[n], lo=Infinity, hi=-Infinity, i; for(i=Math.max(0,n-20);i<n;i++){ lo=Math.min(lo,cs[i].l); hi=Math.max(hi,cs[i].h); }
+    var stopL=lo-0.3*a; if(c[n]-stopL>2.5*a) stopL=c[n]-2*a;
+    var stopS=hi+0.3*a; if(stopS-c[n]>2.5*a) stopS=c[n]+2*a;
+    var stop = side==='short'?stopS:stopL, riskPct=Math.abs(c[n]-stop)/c[n]*100;
+    var stopWhy = side==='short' ? (stopS===hi+0.3*a?'최근 20봉 고점 위 0.3 ATR':'고점이 너무 멀어 2 ATR로 제한') : (stopL===lo-0.3*a?'최근 20봉 저점 아래 0.3 ATR':'저점이 너무 멀어 2 ATR로 제한');
+    var bg=bitgak(cs);
+    return {n:n, c:c[n], prev:c[n-1], rsi:R, macd:M, r:r, side:side, strength:strength, why:why, stop:stop, stopL:stopL, stopS:stopS, riskPct:riskPct, stopWhy:stopWhy, lossAtLev:riskPct*lev, atr:a, bg:bg, lev:lev, tf:tf};
+  }
+
+  function cardsHtml(X){
+    var sideWord = X.side==='long'?'롱이 적절':X.side==='short'?'숏이 적절':'대기';
+    var liq = X.lossAtLev>=100;
+    var html='<div class="card '+X.side+'"><div class="t">RSI · MACD 판단</div><div class="big">'+sideWord+(X.strength?' <span class="tag">'+X.strength+'</span>':'')+'</div><div class="why">'+X.why+'</div>' +
+      '<div class="row"><span>RSI(14)</span><b>'+X.r.toFixed(1)+'</b></div><div class="row"><span>MACD / 시그널</span><b>'+X.macd.line[X.n].toPrecision(3)+' / '+X.macd.signal[X.n].toPrecision(3)+'</b></div></div>';
+    html+='<div class="card '+(X.side==='wait'?'':X.side)+'"><div class="t">스탑로스</div>' +
+      (X.side==='wait' ? '<div class="big">진입 전</div><div class="why">진입하지 않는 자리라 스탑도 없음. 참고로 롱이면 '+fmtP(X.stopL)+', 숏이면 '+fmtP(X.stopS)+'.</div>' :
+       '<div class="big mono">'+fmtP(X.stop)+'</div><div class="why">'+(X.side==='long'?'종가가 이 아래로 마감하면 청산':'종가가 이 위로 마감하면 청산')+' · '+X.stopWhy+'</div>' +
+       '<div class="row"><span>현재가에서</span><b class="'+(X.side==='long'?'down-c':'up-c')+'">'+(X.side==='long'?'−':'+')+X.riskPct.toFixed(2)+'%</b></div>' +
+       '<div class="row"><span>'+X.lev+'x 손절 시 증거금</span><b class="'+(liq||X.lossAtLev>=50?'down-c':'')+'">'+(liq?'청산 (배수 낮출 것)':'−'+X.lossAtLev.toFixed(0)+'%')+'</b></div>') + '</div>';
+    var S=X.bg.sup, R=X.bg.res;
+    html+='<div class="card sup"><div class="t">빗각 롱 타점</div>';
+    if(!S) html+='<div class="big">선 없음</div><div class="why">가격 아래에 유효한 지지선이 없습니다. 피벗이 더 쌓여야 합니다.</div>';
+    else { var kb=barsUntil(S, X.c); html+='<div class="big mono">'+fmtP(S.p)+'</div><div class="why">'+(S.line.kind==='sup'?'저점 둘을 이은 지지선':'돌파한 저항선 (되밟기)')+' · 현재가에서 '+pct(S.dist*100)+'</div>' +
+      '<div class="act">'+(S.touching?'<b>지금 선을 밟고 있음</b> — 이 봉 종가가 선 위면 롱 진입':'가격이 '+fmtP(S.p)+'까지 내려와 선을 밟고 종가가 선 위에서 마감할 때 롱 진입'+(isFinite(kb)&&kb<=60?'. 가격이 그대로면 '+Math.ceil(kb)+'봉('+tfWord(X.tf,kb)+') 뒤 만남':'. 선이 멀어 가격이 내려와야 함'))+'</div>' +
+      '<div class="row"><span>진입 시 스탑 (선 아래 1%+0.3 ATR)</span><b>'+fmtP(S.p*(1-TOL)-0.3*X.atr)+'</b></div>'; }
+    html+='</div><div class="card res"><div class="t">빗각 숏 타점</div>';
+    if(!R) html+='<div class="big">선 없음</div><div class="why">가격 위에 유효한 저항선이 없습니다.</div>';
+    else { var kr=barsUntil(R, X.c); html+='<div class="big mono">'+fmtP(R.p)+'</div><div class="why">고점 둘을 이은 저항선 · 현재가에서 '+pct(R.dist*100)+'</div>' +
+      '<div class="act">'+(R.touching?'<b>지금 선에 닿아 있음</b> — 이 봉 종가가 선 아래면 숏 진입':'가격이 '+fmtP(R.p)+'까지 올라 선에 닿고 종가가 선 아래서 마감할 때 숏 진입'+(isFinite(kr)&&kr<=60?'. 가격이 그대로면 '+Math.ceil(kr)+'봉('+tfWord(X.tf,kr)+') 뒤 만남':'. 선이 멀어 가격이 올라와야 함'))+'. 종가가 선을 1% 넘게 뚫으면 숏 취소 → 되밟을 때 롱.</div>' +
+      '<div class="row"><span>진입 시 스탑 (선 위 1%+0.3 ATR)</span><b>'+fmtP(R.p*(1+TOL)+0.3*X.atr)+'</b></div>'; }
+    html+='</div>';
+    return html;
+  }
+
+  /* ---------- chart ---------- */
+  function css(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function draw(cs, X){
+    var cv=$('cv'), W=cv.clientWidth||1100, H=Math.round(W*0.58), dpr=window.devicePixelRatio||1;
+    cv.width=W*dpr; cv.height=H*dpr; cv.style.height=H+'px';
+    var g=cv.getContext('2d'); g.scale(dpr,dpr);
+    var C={up:css('--up'),down:css('--down'),fg:css('--fg'),muted:css('--muted'),grid:css('--grid'),sup:css('--sup'),res:css('--res'),stop:css('--stop'),accent:css('--accent'),line:css('--line')};
+    var n=cs.length-1, VIS=Math.min(130, cs.length), start=n-VIS+1, proj=Math.round(VIS*0.12), total=VIS+proj;
+    var padL=8, padR=74, top=6, pH=Math.round(H*0.58), rH=Math.round(H*0.16), mH=H-top-pH-rH-28, gap=10;
+    var plotW=W-padL-padR, bw=plotW/total;
+    var x=function(i){ return padL+(i-start+0.5)*bw; };
+    var lo=Infinity,hi=-Infinity,i;
+    for(i=start;i<=n;i++){ lo=Math.min(lo,cs[i].l); hi=Math.max(hi,cs[i].h); }
+    X.bg.all.forEach(function(L){ for(i=Math.max(start,L.line.a);i<=n+proj;i++){ var p=L.line.at(i); if(p>lo*0.9&&p<hi*1.1){lo=Math.min(lo,p);hi=Math.max(hi,p);} } });
+    lo=Math.min(lo,X.stop); hi=Math.max(hi,X.stop); var span=(hi-lo)||1; lo-=span*0.04; hi+=span*0.04; span=hi-lo;
+    var y=function(p){ return top+pH-(p-lo)/span*pH; };
+    g.font='11px '+css('--mono'); g.textBaseline='middle';
+    // grid + price axis
+    g.strokeStyle=C.grid; g.lineWidth=1; g.fillStyle=C.muted; g.textAlign='left';
+    var ticks=5; for(i=0;i<=ticks;i++){ var p=lo+span*i/ticks, yy=y(p); g.beginPath(); g.moveTo(padL,yy); g.lineTo(W-padR,yy); g.stroke(); g.fillText(fmtP(p),W-padR+4,yy); }
+    // time axis labels
+    g.textAlign='center'; for(i=start;i<=n;i+=Math.round(VIS/6)){ var d=new Date(cs[i].t); g.fillText((d.getMonth()+1)+'/'+d.getDate()+(X.tf==='1d'?'':' '+d.getHours()+'h'), x(i), top+pH+10); }
+    // 빗각 lines
+    X.bg.all.forEach(function(L){
+      var isNear = L===X.bg.sup || L===X.bg.res;
+      g.strokeStyle = L.broken?C.sup:C.res; g.lineWidth=isNear?2:1; g.globalAlpha=isNear?1:0.35; g.setLineDash(isNear?[]:[4,4]);
+      g.beginPath(); var first=true; for(i=Math.max(start,L.line.a);i<=n+proj;i++){ var p=L.line.at(i); if(p<lo||p>hi){first=true;continue;} if(first){g.moveTo(x(i),y(p));first=false;} else g.lineTo(x(i),y(p)); } g.stroke();
+      if(isNear){ g.fillStyle=L.broken?C.sup:C.res; g.textAlign='right'; g.fillText((L.broken?'지지 ':'저항 ')+fmtP(L.line.at(n+proj)), W-padR-4, y(L.line.at(n+proj))-8); }
+    });
+    g.globalAlpha=1; g.setLineDash([]);
+    // pivots
+    X.bg.pv.lows.forEach(function(i){ if(i<start)return; g.fillStyle=C.sup; g.beginPath(); g.arc(x(i),y(cs[i].l)+6,2.5,0,7); g.fill(); });
+    X.bg.pv.highs.forEach(function(i){ if(i<start)return; g.fillStyle=C.res; g.beginPath(); g.arc(x(i),y(cs[i].h)-6,2.5,0,7); g.fill(); });
+    // candles
+    for(i=start;i<=n;i++){ var k=cs[i], col=k.c>=k.o?C.up:C.down; g.strokeStyle=col; g.fillStyle=col; g.lineWidth=1;
+      g.beginPath(); g.moveTo(x(i),y(k.h)); g.lineTo(x(i),y(k.l)); g.stroke();
+      var yo=y(k.o), yc=y(k.c), hh=Math.max(1,Math.abs(yc-yo)); g.fillRect(x(i)-bw*0.3, Math.min(yo,yc), bw*0.6, hh); }
+    // stop line
+    if(X.side!=='wait'){ g.strokeStyle=C.stop; g.setLineDash([6,4]); g.lineWidth=1.5; g.beginPath(); g.moveTo(padL,y(X.stop)); g.lineTo(W-padR,y(X.stop)); g.stroke(); g.setLineDash([]);
+      g.fillStyle=C.stop; g.textAlign='left'; g.fillText('STOP '+fmtP(X.stop), padL+4, y(X.stop)+(X.side==='long'?10:-10)); }
+    // entry markers
+    [X.bg.sup,X.bg.res].forEach(function(L){ if(!L)return; var ex_=n+Math.min(proj-1, Math.max(1, isFinite(barsUntil(L,X.c))?Math.ceil(barsUntil(L,X.c)):proj-1)), py=y(L.line.at(ex_));
+      g.fillStyle=C.accent; g.beginPath(); if(L.broken){ g.moveTo(x(ex_),py-3); g.lineTo(x(ex_)-6,py+8); g.lineTo(x(ex_)+6,py+8);} else { g.moveTo(x(ex_),py+3); g.lineTo(x(ex_)-6,py-8); g.lineTo(x(ex_)+6,py-8);} g.closePath(); g.fill(); });
+    // current price marker
+    g.fillStyle=C.fg; g.fillRect(W-padR, y(X.c)-8, padR, 16); g.fillStyle=css('--bg'); g.textAlign='left'; g.fillText(fmtP(X.c), W-padR+4, y(X.c));
+    // RSI panel
+    var rTop=top+pH+22, ry=function(v){ return rTop+rH-(v/100)*rH; };
+    g.fillStyle=C.muted; g.textAlign='left'; g.font='bold 11px '+css('--font'); g.fillText('RSI(14)  '+X.r.toFixed(1), padL+4, rTop+8); g.font='11px '+css('--mono');
+    g.strokeStyle=C.grid; g.setLineDash([3,3]); [30,70].forEach(function(v){ g.beginPath(); g.moveTo(padL,ry(v)); g.lineTo(W-padR,ry(v)); g.stroke(); g.fillText(v, W-padR+4, ry(v)); }); g.setLineDash([]);
+    g.fillStyle=C.up; g.globalAlpha=0.08; g.fillRect(padL,ry(100),plotW,ry(70)-ry(100)); g.fillStyle=C.down; g.fillRect(padL,ry(30),plotW,ry(0)-ry(30)); g.globalAlpha=1;
+    g.strokeStyle=C.accent; g.lineWidth=1.5; g.beginPath(); var f=true; for(i=start;i<=n;i++){ var v=X.rsi[i]; if(!isFinite(v))continue; if(f){g.moveTo(x(i),ry(v));f=false;} else g.lineTo(x(i),ry(v)); } g.stroke();
+    // MACD panel
+    var mTop=rTop+rH+gap, mx=0; for(i=start;i<=n;i++){ mx=Math.max(mx,Math.abs(X.macd.line[i]||0),Math.abs(X.macd.signal[i]||0),Math.abs(X.macd.hist[i]||0)); } mx=mx||1;
+    var my=function(v){ return mTop+mH/2-(v/mx)*(mH/2-4); };
+    g.fillStyle=C.muted; g.font='bold 11px '+css('--font'); g.fillText('MACD(12,26,9)  '+(X.macd.line[n]>X.macd.signal[n]?'상승 모멘텀':'하락 모멘텀'), padL+4, mTop+8); g.font='11px '+css('--mono');
+    g.strokeStyle=C.grid; g.beginPath(); g.moveTo(padL,my(0)); g.lineTo(W-padR,my(0)); g.stroke();
+    for(i=start;i<=n;i++){ var hv=X.macd.hist[i]; if(!isFinite(hv))continue; g.fillStyle=hv>=0?C.up:C.down; g.globalAlpha=0.6; g.fillRect(x(i)-bw*0.3, Math.min(my(0),my(hv)), bw*0.6, Math.abs(my(hv)-my(0))||1); }
+    g.globalAlpha=1;
+    [['line',C.fg],['signal',C.res]].forEach(function(s){ g.strokeStyle=s[1]; g.lineWidth=1.3; g.beginPath(); var ff=true; for(i=start;i<=n;i++){ var v=X.macd[s[0]][i]; if(!isFinite(v))continue; if(ff){g.moveTo(x(i),my(v));ff=false;} else g.lineTo(x(i),my(v)); } g.stroke(); });
+  }
+
+  /* ---------- run ---------- */
+  var last=null;
+  function run(){
+    var ex=$('ex').value, tf=$('tf').value, sym=normalize($('sym').value, ex), lev=parseFloat($('lev').value)||10;
+    quote= ex==='upbit'?'KRW':'USDT'; save();
+    if(!sym){ $('status').textContent='코인을 입력하세요'; return; }
+    $('go').disabled=true; $('status').textContent=SANDBOX?'미리보기 환경 — 거래소 접속 불가':sym+' 불러오는 중…';
+    $('err').hidden=true;
+    fetchCandles(ex,sym,tf).then(function(cs){
+      var X=analyze(cs,tf,lev); last={cs:cs,X:X};
+      $('cards').innerHTML=cardsHtml(X); $('cards').hidden=false; $('chartbox').hidden=false;
+      $('price').textContent=sym+'  '+fmtP(X.c); var ch=(X.c/X.prev-1)*100; $('chg').textContent='직전 봉 '+pct(ch)+' · '+tf; $('chg').className='lbl '+(ch>=0?'up-c':'down-c');
+      draw(cs,X);
+      $('status').textContent='업데이트 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    }).catch(function(e){
+      $('cards').hidden=true; $('chartbox').hidden=true; $('err').hidden=false;
+      $('err').innerHTML = SANDBOX ? '이 화면(claude.ai 미리보기)은 보안 정책상 거래소 접속이 차단됩니다. <b>HTML 파일을 내려받아 PC에서 직접 열면</b> 작동합니다. (오류: '+e.message+')' : sym+' 시세를 불러오지 못했습니다 ('+e.message+'). 심볼이 이 거래소에 있는지 확인하시고, 바이낸스 선물이 막히면 현물로 바꿔 보세요.';
+      $('status').textContent='';
+    }).finally(function(){ $('go').disabled=false; });
+  }
+  $('go').addEventListener('click',run);
+  $('sym').addEventListener('keydown',function(e){ if(e.key==='Enter') run(); });
+  window.addEventListener('resize',function(){ if(last) draw(last.cs,last.X); });
+  run();
+})();
+</script>
+
+</body>
+</html>
