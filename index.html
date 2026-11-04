@@ -89,7 +89,7 @@ footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--ac
   <div class="err" id="err" hidden></div>
   <div class="chart" id="chartbox" hidden>
     <div class="head"><div><span class="p" id="price"></span> <span class="lbl" id="chg"></span></div>
-      <div class="legend"><span><i style="border-color:var(--sup)"></i>빗각 지지선</span><span><i style="border-color:var(--res)"></i>빗각 저항선</span><span><i style="border-color:var(--stop);border-top-style:dashed"></i>스탑로스</span><span><i style="border-color:var(--accent)"></i>진입 타점</span></div></div>
+      <div class="legend"><span><i style="border-color:var(--sup)"></i>빗각 지지선</span><span><i style="border-color:var(--res)"></i>빗각 저항선</span><span><i style="border-color:var(--stop);border-top-style:dashed"></i>스탑로스</span><span><i style="border-color:var(--fg);border-top-style:dotted"></i>현재가</span><span>▲▼ 진입 타점</span></div></div>
     <div class="zoom"><button id="zin" aria-label="확대">＋</button><button id="zout" aria-label="축소">－</button><button id="zall">전체</button><span class="lbl" id="zinfo"></span><span class="lbl hint">휠·드래그 / 두 손가락</span></div>
     <canvas id="cv" width="1100" height="640"></canvas>
   </div>
@@ -235,7 +235,9 @@ footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--ac
     var cLo=lo, cHi=hi, keep=[];
     X.bg.all.forEach(function(L){ var pn=L.line.at(vEnd); if(pn>cLo*0.85&&pn<cHi*1.15){ keep.push(L); for(i=Math.max(start,L.line.a);i<=vEnd+proj;i++){ var p=L.line.at(i); if(p>cLo*0.85&&p<cHi*1.15){lo=Math.min(lo,p);hi=Math.max(hi,p);} } } });
     X.bg.all=keep;
-    lo=Math.min(lo,X.stop); hi=Math.max(hi,X.stop); var span=(hi-lo)||1; lo-=span*0.04; hi+=span*0.04; span=hi-lo;
+    lo=Math.min(lo,X.stop); hi=Math.max(hi,X.stop);
+    if(X.bg.sup){ lo=Math.min(lo, X.bg.sup.line.at(n)*(1-TOL)-0.3*X.atr); } if(X.bg.res){ hi=Math.max(hi, X.bg.res.line.at(n)*(1+TOL)+0.3*X.atr); }
+    var span=(hi-lo)||1; lo-=span*0.04; hi+=span*0.04; span=hi-lo;
     var y=function(p){ return top+pH-(p-lo)/span*pH; };
     g.font='11px '+css('--mono'); g.textBaseline='middle';
     // grid + price axis
@@ -260,10 +262,27 @@ footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--ac
       var yo=y(k.o), yc=y(k.c), hh=Math.max(1,Math.abs(yc-yo)); g.fillRect(x(i)-bw*0.3, Math.min(yo,yc), bw*0.6, hh); }
     // stop line
     if(X.side!=='wait'){ g.strokeStyle=C.stop; g.setLineDash([6,4]); g.lineWidth=1.5; g.beginPath(); g.moveTo(padL,y(X.stop)); g.lineTo(W-padR,y(X.stop)); g.stroke(); g.setLineDash([]);
-      g.fillStyle=C.stop; g.textAlign='left'; g.fillText('STOP '+fmtP(X.stop), padL+4, y(X.stop)+(X.side==='long'?10:-10)); }
-    // entry markers
-    if(vEnd===n) [X.bg.sup,X.bg.res].forEach(function(L){ if(!L)return; var ex_=n+Math.min(proj-1, Math.max(1, isFinite(barsUntil(L,X.c))?Math.ceil(barsUntil(L,X.c)):proj-1)), py=y(L.line.at(ex_));
-      g.fillStyle=C.accent; g.beginPath(); if(L.broken){ g.moveTo(x(ex_),py-3); g.lineTo(x(ex_)-6,py+8); g.lineTo(x(ex_)+6,py+8);} else { g.moveTo(x(ex_),py+3); g.lineTo(x(ex_)-6,py-8); g.lineTo(x(ex_)+6,py-8);} g.closePath(); g.fill(); });
+      g.fillStyle=C.stop; g.textAlign='left'; g.fillText('스탑로스 (RSI·MACD 기준) '+fmtP(X.stop), padL+4, y(X.stop)+(X.side==='long'?10:-10)); }
+    // entry markers: horizontal tag lines from the last candle to the right edge, triangle on the trendline, stop segment
+    if(vEnd===n){
+      var x0=x(n)+bw*0.6, x1=W-padR-2;
+      function tag(level, col, label, above, dashed){
+        var yy=y(level); if(yy<top||yy>top+pH) return;
+        g.strokeStyle=col; g.lineWidth=1.2; g.setLineDash(dashed?[3,3]:[]); g.beginPath(); g.moveTo(x0,yy); g.lineTo(x1,yy); g.stroke(); g.setLineDash([]);
+        g.fillStyle=col; g.textAlign='right'; g.font='bold 11px '+css('--font'); g.fillText(label, x1, yy+(above?-8:9)); g.font='11px '+css('--mono');
+        g.fillRect(W-padR, yy-7, padR, 14); g.fillStyle=css('--bg'); g.textAlign='left'; g.fillText(fmtP(level), W-padR+4, yy);
+      }
+      if(X.bg.sup){ var S=X.bg.sup, ps=S.line.at(n), py=y(ps);
+        g.fillStyle=C.sup; g.beginPath(); g.moveTo(x(n+1),py-2); g.lineTo(x(n+1)-7,py+10); g.lineTo(x(n+1)+7,py+10); g.closePath(); g.fill();
+        tag(ps, C.sup, '롱 진입 (선 밟을 때)', false, false);
+        tag(ps*(1-TOL)-0.3*X.atr, C.stop, '롱 스탑', false, true); }
+      if(X.bg.res){ var R=X.bg.res, pr=R.line.at(n), pyr=y(pr);
+        g.fillStyle=C.res; g.beginPath(); g.moveTo(x(n+1),pyr+2); g.lineTo(x(n+1)-7,pyr-10); g.lineTo(x(n+1)+7,pyr-10); g.closePath(); g.fill();
+        tag(pr, C.res, '숏 진입 (선 닿을 때)', true, false);
+        tag(pr*(1+TOL)+0.3*X.atr, C.stop, '숏 스탑', true, true); }
+    }
+    // current price line
+    g.strokeStyle=C.fg; g.lineWidth=1; g.globalAlpha=0.7; g.setLineDash([2,3]); g.beginPath(); g.moveTo(padL,y(X.c)); g.lineTo(W-padR,y(X.c)); g.stroke(); g.setLineDash([]); g.globalAlpha=1;
     // current price marker
     g.fillStyle=C.fg; g.fillRect(W-padR, y(X.c)-8, padR, 16); g.fillStyle=css('--bg'); g.textAlign='left'; g.fillText(fmtP(X.c), W-padR+4, y(X.c));
     // RSI panel
