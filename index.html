@@ -57,6 +57,7 @@ button.go:disabled{opacity:.5}
 .card .act{font-size:13.5px;font-weight:500;background:var(--surface-2);border-radius:8px;padding:8px 10px}
 .tag{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;background:var(--accent);color:#fff;vertical-align:middle;margin-left:4px}
 .up-c{color:var(--up)} .down-c{color:var(--down)}
+.card .big.dim{color:var(--muted)} .tag.off{background:var(--flat)} .card .why.warn{color:var(--res)}
 
 .chart{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 6px 6px;min-width:0}
 .chart .head{display:flex;justify-content:space-between;align-items:baseline;padding:0 10px 6px;flex-wrap:wrap;gap:6px}
@@ -96,7 +97,7 @@ footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--ac
   <details><summary>판단 규칙</summary>
     <p><b>RSI·MACD 판단</b> MACD선이 시그널선 위(상승 모멘텀)이고 RSI가 70 미만이면 롱 쪽, MACD선이 시그널선 아래이고 RSI가 30 초과면 숏 쪽. RSI가 과매수(70↑)·과매도(30↓)로 모멘텀과 반대 신호를 내면 "대기". 최근 3봉 안의 골든·데드크로스와 히스토그램 확대는 "강함"으로 표시합니다.</p>
     <p><b>스탑로스</b> 롱은 최근 20봉 안 마지막 저점 아래 0.3 ATR, 숏은 마지막 고점 위 0.3 ATR. 그 자리가 현재가에서 2.5 ATR보다 멀면 2 ATR로 줄입니다(손실 한도 우선). 증거금 손실률은 손절 거리 × 레버리지입니다.</p>
-    <p><b>빗각</b> 좌우 5봉 기준 피벗 저점 둘을 이은 우상향 선(지지선), 피벗 고점 둘을 이은 우하향 선(저항선)을 로그 가격으로 연장합니다. 사이에서 종가가 1% 넘게 뚫린 선은 버리고, 종가가 선 아래(위) 1%로 마감하면 선은 소멸합니다. <b>롱 타점</b>: 가격이 지지선에 닿고(1% 이내) 종가가 선 위에서 마감할 때. <b>숏 타점</b>: 저항선에 닿고 종가가 선 아래에서 마감할 때. 저항선을 1% 넘게 돌파한 뒤 되돌아와 밟으면 그 선은 롱 타점이 됩니다. "약 N봉 뒤"는 가격이 지금 그대로일 때 선과 만나는 시점입니다.</p>
+    <p><b>빗각</b> 좌우 5봉 기준 피벗 저점 둘을 이은 우상향 선(지지선), 피벗 고점 둘을 이은 우하향 선(저항선)을 로그 가격으로 연장합니다. 사이에서 종가가 1% 넘게 뚫린 선은 버리고, 종가가 선 아래(위) 1%로 마감하면 선은 소멸합니다. <b>롱 타점</b>: 가격이 지지선에 닿고(1% 이내) 종가가 선 위에서 마감할 때. <b>숏 타점</b>: 저항선에 닿고 종가가 선 아래에서 마감할 때. 저항선을 1% 넘게 돌파한 뒤 되돌아와 밟으면 그 선은 롱 타점이 됩니다. "약 N봉 뒤"는 가격이 지금 그대로일 때 선과 만나는 시점입니다. 선이 현재가에서 5% 또는 3 ATR 이상 멀면 <b>비활성</b>으로 표시하고, 대신 가격을 따라오는 기준(EMA20·EMA50·최근 피벗)을 "가까운 눌림·반등 기준"으로 보여줍니다. 빗각 타점은 "그 가격이 오면"이라는 조건부 예약이지 예측이 아니므로, 가격이 반대로 달아나면 그 시나리오는 버리고 새 선을 기다립니다.</p>
   </details>
   <footer>시세: <a href="https://developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Kline-Candlestick-Data" target="_blank" rel="noopener">Binance API</a> · <a href="https://docs.upbit.com/kr/reference/list-candles-days" target="_blank" rel="noopener">업비트 API</a>. 과거 가격으로 계산한 규칙 기반 안내이며 투자 자문이 아닙니다. 매매 판단과 책임은 사용자에게 있습니다.</footer>
 </div>
@@ -118,7 +119,7 @@ footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--ac
     if(/(USDT|USDC|BUSD|BTC)$/.test(s)&&s.length>5) return s;
     return s+'USDT';
   }
-  function getJson(u){ return fetch(u).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }); }
+  function getJson(u){ return fetch(u,{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); }); }
   function fetchCandles(ex, sym, tf){
     if(ex==='upbit'){
       var path= tf==='1d'?'days':tf==='4h'?'minutes/240':'minutes/60', base='https://api.upbit.com/v1/candles/'+path+'?market='+encodeURIComponent(sym)+'&count=200', acc=[];
@@ -184,8 +185,12 @@ footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--ac
     var stopS=hi+0.3*a; if(stopS-c[n]>2.5*a) stopS=c[n]+2*a;
     var stop = side==='short'?stopS:stopL, riskPct=Math.abs(c[n]-stop)/c[n]*100;
     var stopWhy = side==='short' ? (stopS===hi+0.3*a?'최근 20봉 고점 위 0.3 ATR':'고점이 너무 멀어 2 ATR로 제한') : (stopL===lo-0.3*a?'최근 20봉 저점 아래 0.3 ATR':'저점이 너무 멀어 2 ATR로 제한');
-    var bg=bitgak(cs);
-    return {n:n, c:c[n], prev:c[n-1], rsi:R, macd:M, r:r, side:side, strength:strength, why:why, stop:stop, stopL:stopL, stopS:stopS, riskPct:riskPct, stopWhy:stopWhy, lossAtLev:riskPct*lev, atr:a, bg:bg, lev:lev, tf:tf};
+    var bg=bitgak(cs), e20=ema(c,20)[n], e50=ema(c,50)[n], pl=bg.pv.lows, ph=bg.pv.highs;
+    var alts=[['EMA20',e20],['EMA50',e50]]; if(pl.length&&n-pl[pl.length-1]<=60) alts.push(['최근 저점',cs[pl[pl.length-1]].l]);
+    var altL=alts.filter(function(x){return isFinite(x[1])&&x[1]<c[n];}).sort(function(x,y){return y[1]-x[1];})[0]||null;
+    var altsS=[['EMA20',e20],['EMA50',e50]]; if(ph.length&&n-ph[ph.length-1]<=60) altsS.push(['최근 고점',cs[ph[ph.length-1]].h]);
+    var altS=altsS.filter(function(x){return isFinite(x[1])&&x[1]>c[n];}).sort(function(x,y){return x[1]-y[1];})[0]||null;
+    return {altL:altL, altS:altS, lastT:cs[n].t, n:n, c:c[n], prev:c[n-1], rsi:R, macd:M, r:r, side:side, strength:strength, why:why, stop:stop, stopL:stopL, stopS:stopS, riskPct:riskPct, stopWhy:stopWhy, lossAtLev:riskPct*lev, atr:a, bg:bg, lev:lev, tf:tf};
   }
 
   function cardsHtml(X){
@@ -200,15 +205,19 @@ footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--ac
        '<div class="row"><span>'+X.lev+'x 손절 시 증거금</span><b class="'+(liq||X.lossAtLev>=50?'down-c':'')+'">'+(liq?'청산 (배수 낮출 것)':'−'+X.lossAtLev.toFixed(0)+'%')+'</b></div>') + '</div>';
     var S=X.bg.sup, R=X.bg.res;
     html+='<div class="card sup"><div class="t">빗각 롱 타점</div>';
-    if(!S) html+='<div class="big">선 없음</div><div class="why">가격 아래에 유효한 지지선이 없습니다. 피벗이 더 쌓여야 합니다.</div>';
-    else { var kb=barsUntil(S, X.c); html+='<div class="big mono">'+fmtP(S.p)+'</div><div class="why">'+(S.line.kind==='sup'?'저점 둘을 이은 지지선':'돌파한 저항선 (되밟기)')+' · 현재가에서 '+pct(S.dist*100)+'</div>' +
+    var farL = S && (Math.abs(S.dist)>0.05 || Math.abs(X.c-S.p)>3*X.atr);
+    var altLHtml = X.altL ? '<div class="row"><span>가까운 눌림 기준 (추세선 아님)</span><b>'+X.altL[0]+' '+fmtP(X.altL[1])+' ('+pct((X.altL[1]/X.c-1)*100)+')</b></div>' : '';
+    if(!S) html+='<div class="big">선 없음</div><div class="why">가격 아래에 유효한 지지선이 없습니다. 새 피벗이 확정되면(좌우 5봉) 선이 생깁니다.</div>'+altLHtml;
+    else { var kb=barsUntil(S, X.c); html+='<div class="big mono'+(farL?' dim':'')+'">'+fmtP(S.p)+(farL?' <span class="tag off">비활성</span>':'')+'</div>'+(farL?'<div class="why warn">선이 현재가에서 너무 멀어 지금은 기다릴 타점이 아닙니다. 가격이 다시 내려오거나 새 선이 생길 때까지 무시하세요.</div>':'')+'<div class="why">'+(S.line.kind==='sup'?'저점 둘을 이은 지지선':'돌파한 저항선 (되밟기)')+' · 현재가에서 '+pct(S.dist*100)+'</div>' +
       '<div class="act">'+(S.touching?'<b>지금 선을 밟고 있음</b> — 이 봉 종가가 선 위면 롱 진입':'가격이 '+fmtP(S.p)+'까지 내려와 선을 밟고 종가가 선 위에서 마감할 때 롱 진입'+(isFinite(kb)&&kb<=60?'. 가격이 그대로면 '+Math.ceil(kb)+'봉('+tfWord(X.tf,kb)+') 뒤 만남':'. 선이 멀어 가격이 내려와야 함'))+'</div>' +
-      '<div class="row"><span>진입 시 스탑 (선 아래 1%+0.3 ATR)</span><b>'+fmtP(S.p*(1-TOL)-0.3*X.atr)+'</b></div>'; }
+      '<div class="row"><span>진입 시 스탑 (선 아래 1%+0.3 ATR)</span><b>'+fmtP(S.p*(1-TOL)-0.3*X.atr)+'</b></div>'+(farL?altLHtml:''); }
     html+='</div><div class="card res"><div class="t">빗각 숏 타점</div>';
-    if(!R) html+='<div class="big">선 없음</div><div class="why">가격 위에 유효한 저항선이 없습니다.</div>';
-    else { var kr=barsUntil(R, X.c); html+='<div class="big mono">'+fmtP(R.p)+'</div><div class="why">고점 둘을 이은 저항선 · 현재가에서 '+pct(R.dist*100)+'</div>' +
+    var farS = R && (Math.abs(R.dist)>0.05 || Math.abs(X.c-R.p)>3*X.atr);
+    var altSHtml = X.altS ? '<div class="row"><span>가까운 반등 기준 (추세선 아님)</span><b>'+X.altS[0]+' '+fmtP(X.altS[1])+' ('+pct((X.altS[1]/X.c-1)*100)+')</b></div>' : '';
+    if(!R) html+='<div class="big">선 없음</div><div class="why">가격 위에 유효한 저항선이 없습니다. 새 피벗 고점이 확정되면 선이 생깁니다.</div>'+altSHtml;
+    else { var kr=barsUntil(R, X.c); html+='<div class="big mono'+(farS?' dim':'')+'">'+fmtP(R.p)+(farS?' <span class="tag off">비활성</span>':'')+'</div>'+(farS?'<div class="why warn">선이 현재가에서 너무 멀어 지금은 기다릴 타점이 아닙니다.</div>':'')+'<div class="why">고점 둘을 이은 저항선 · 현재가에서 '+pct(R.dist*100)+'</div>' +
       '<div class="act">'+(R.touching?'<b>지금 선에 닿아 있음</b> — 이 봉 종가가 선 아래면 숏 진입':'가격이 '+fmtP(R.p)+'까지 올라 선에 닿고 종가가 선 아래서 마감할 때 숏 진입'+(isFinite(kr)&&kr<=60?'. 가격이 그대로면 '+Math.ceil(kr)+'봉('+tfWord(X.tf,kr)+') 뒤 만남':'. 선이 멀어 가격이 올라와야 함'))+'. 종가가 선을 1% 넘게 뚫으면 숏 취소 → 되밟을 때 롱.</div>' +
-      '<div class="row"><span>진입 시 스탑 (선 위 1%+0.3 ATR)</span><b>'+fmtP(R.p*(1+TOL)+0.3*X.atr)+'</b></div>'; }
+      '<div class="row"><span>진입 시 스탑 (선 위 1%+0.3 ATR)</span><b>'+fmtP(R.p*(1+TOL)+0.3*X.atr)+'</b></div>'+(farS?altSHtml:''); }
     html+='</div>';
     return html;
   }
@@ -335,7 +344,7 @@ footer{font-size:12px;color:var(--muted);max-width:75ch} footer a{color:var(--ac
       $('cards').innerHTML=cardsHtml(X); $('cards').hidden=false; $('chartbox').hidden=false;
       $('price').textContent=sym+'  '+fmtP(X.c); var ch=(X.c/X.prev-1)*100; $('chg').textContent='직전 봉 '+pct(ch)+' · '+tf; $('chg').className='lbl '+(ch>=0?'up-c':'down-c');
       draw(cs,X,view);
-      $('status').textContent='업데이트 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+      var lt=new Date(X.lastT); $('status').textContent='기준 봉 '+(lt.getMonth()+1)+'/'+lt.getDate()+' '+lt.getHours()+':00 (진행 중) · 업데이트 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
     }).catch(function(e){
       $('cards').hidden=true; $('chartbox').hidden=true; $('err').hidden=false;
       $('err').innerHTML = SANDBOX ? '이 화면(claude.ai 미리보기)은 보안 정책상 거래소 접속이 차단됩니다. <b>HTML 파일을 내려받아 PC에서 직접 열면</b> 작동합니다. (오류: '+e.message+')' : sym+' 시세를 불러오지 못했습니다 ('+e.message+'). 심볼이 이 거래소에 있는지 확인하시고, 바이낸스 선물이 막히면 현물로 바꿔 보세요.';
